@@ -1,5 +1,12 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* O atributo `hidden` deve SEMPRE esconder o elemento. A regra padrão do
+   navegador ([hidden]{display:none}) é vencida por qualquer seletor de ID
+   com `display` (ex.: #view-login/#view-shell abaixo, que usam display:flex).
+   Sem este !important, `viewLogin.hidden = true` não escondia a tela de
+   login e o app parecia "não abrir nada" após o login. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {
