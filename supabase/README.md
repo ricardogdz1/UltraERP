@@ -3,9 +3,9 @@
 ## Passos
 
 1. Crie um projeto em [supabase.com](https://supabase.com) (região `sa-east-1`, São Paulo — menor latência para lojistas brasileiros).
-2. No **SQL Editor**, execute os arquivos de `migrations/` **na ordem**:
-   `0001_tabelas_base.sql` → `0002_rls.sql` → `0003_subscription_status.sql` → `0004_estoque.sql` → `0005_fix_grants_funcoes.sql`.
-   *(Já aplicadas no projeto `UltraERP` em 08/07/2026.)*
+2. No **SQL Editor**, execute os arquivos de `migrations/` **na ordem** (0001 a 0007):
+   base → RLS → subscription_status → estoque → fix_grants → onboarding → estoque_resumo.
+   *(Já aplicadas no projeto `UltraERP-BR` em sa-east-1.)*
 3. Em **Authentication → Providers**, deixe apenas *Email* habilitado (Fase 1) e desative *Confirm email* durante o desenvolvimento.
 4. Em **Settings → API**, copie a *URL* e a *anon key* para o `.env` do app. Em **Settings → Database**, copie a connection string do *pooler* (porta 6543) para `DATABASE_URL`.
 

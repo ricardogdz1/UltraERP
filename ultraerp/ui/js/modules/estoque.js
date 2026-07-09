@@ -1,8 +1,12 @@
-/* Módulo Estoque (Fase 1): listagem paginada com busca, cadastro com
-   erro por campo, alerta de estoque mínimo e ajuste com motivo.
+/* Módulo Estoque (Fase 1 — completo): KPIs, listagem paginada com busca e
+   filtro de estoque baixo, cadastro com erro por campo, ajuste com motivo
+   (em modal) e histórico de movimentações por produto.
    O estado vive no painel da aba — preservado ao trocar de aba. */
 
 const ModuloEstoque = (() => {
+
+  const brl = (v) =>
+    Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   function render(panel) {
     panel.innerHTML = `
@@ -10,28 +14,63 @@ const ModuloEstoque = (() => {
         <h2>Estoque</h2>
         <button class="btn-primary btn-inline" data-acao="novo">+ Novo produto</button>
       </div>
-      <div class="toolbar">
+
+      <div class="kpis"></div>
+
+      <div class="toolbar toolbar-flex">
         <input class="busca" placeholder="Buscar por nome ou código de barras…">
+        <label class="checkbox filtro-baixo">
+          <input type="checkbox" data-filtro="baixo"> Somente abaixo do mínimo
+        </label>
       </div>
+
       <div class="form-produto" hidden></div>
       <div class="lista"></div>
       <div class="paginacao"></div>
+
+      <div class="modal-overlay" hidden>
+        <div class="modal">
+          <div class="modal-head">
+            <h3 class="modal-titulo"></h3>
+            <button class="modal-close" title="Fechar">✕</button>
+          </div>
+          <div class="modal-body"></div>
+        </div>
+      </div>
     `;
 
-    const estado = { pagina: 1, busca: '' };
+    const estado = { pagina: 1, busca: '', so_baixo: false };
     const $ = (sel) => panel.querySelector(sel);
 
-    // ---- listagem ----------------------------------------------------------
+    // ---- KPIs ---------------------------------------------------------------
+
+    async function carregarKpis() {
+      const r = await Api.call('estoque_resumo');
+      if (!r.ok) { $('.kpis').innerHTML = ''; return; }
+      const k = r.data;
+      $('.kpis').innerHTML = `
+        <div class="kpi"><span class="kpi-num">${k.total}</span><span class="kpi-lbl">Produtos ativos</span></div>
+        <div class="kpi ${k.abaixo_minimo ? 'kpi-alerta' : ''}">
+          <span class="kpi-num">${k.abaixo_minimo}</span><span class="kpi-lbl">Abaixo do mínimo</span></div>
+        <div class="kpi"><span class="kpi-num">${brl(k.valor_custo)}</span><span class="kpi-lbl">Valor em estoque (custo)</span></div>
+        <div class="kpi"><span class="kpi-num">${brl(k.valor_venda)}</span><span class="kpi-lbl">Valor em estoque (venda)</span></div>`;
+    }
+
+    // ---- listagem -----------------------------------------------------------
 
     async function carregar() {
       const lista = $('.lista');
       lista.innerHTML = '<p class="muted">Carregando…</p>';
-      const r = await Api.call('estoque_listar', estado.pagina, estado.busca);
-      if (!r.ok) { lista.innerHTML = `<p class="field-error">${r.error}</p>`; return; }
+      const r = await Api.call('estoque_listar', estado.pagina, estado.busca, estado.so_baixo);
+      if (!r.ok) { lista.innerHTML = `<p class="field-error">${esc(r.error)}</p>`; return; }
 
       const { itens, total } = r.data;
       if (!itens.length) {
-        lista.innerHTML = '<p class="muted">Nenhum produto encontrado. Clique em “+ Novo produto” para começar.</p>';
+        lista.innerHTML = estado.so_baixo
+          ? '<p class="muted">Nenhum produto abaixo do estoque mínimo. 👍</p>'
+          : (estado.busca
+              ? '<p class="muted">Nenhum produto encontrado para essa busca.</p>'
+              : '<p class="muted">Nenhum produto ainda. Clique em “+ Novo produto” para começar.</p>');
         $('.paginacao').innerHTML = '';
         return;
       }
@@ -46,29 +85,29 @@ const ModuloEstoque = (() => {
         </table>`;
 
       lista.querySelectorAll('[data-editar]').forEach(btn =>
-        btn.addEventListener('click', () =>
-          abrirForm(itens.find(p => p.id === btn.dataset.editar))));
+        btn.addEventListener('click', () => abrirForm(itens.find(p => p.id === btn.dataset.editar))));
       lista.querySelectorAll('[data-ajustar]').forEach(btn =>
-        btn.addEventListener('click', () =>
-          ajustar(itens.find(p => p.id === btn.dataset.ajustar))));
+        btn.addEventListener('click', () => abrirAjuste(itens.find(p => p.id === btn.dataset.ajustar))));
+      lista.querySelectorAll('[data-historico]').forEach(btn =>
+        btn.addEventListener('click', () => abrirHistorico(itens.find(p => p.id === btn.dataset.historico))));
       lista.querySelectorAll('[data-excluir]').forEach(btn =>
-        btn.addEventListener('click', () =>
-          excluir(itens.find(p => p.id === btn.dataset.excluir))));
+        btn.addEventListener('click', () => excluir(itens.find(p => p.id === btn.dataset.excluir))));
 
       paginacao(total);
     }
 
     function linha(p) {
-      const baixo = Number(p.estoque_atual) <= Number(p.estoque_minimo);
+      const baixo = p.abaixo_minimo ?? (Number(p.estoque_atual) <= Number(p.estoque_minimo));
       return `<tr>
         <td>${esc(p.nome)}</td>
         <td>${esc(p.ean) || '—'}</td>
-        <td>R$ ${Number(p.preco_venda).toFixed(2).replace('.', ',')}</td>
+        <td>${brl(p.preco_venda)}</td>
         <td>${Number(p.estoque_atual)} ${esc(p.unidade)}
             ${baixo ? '<span class="badge-alerta" title="Abaixo do estoque mínimo">baixo</span>' : ''}</td>
         <td class="acoes">
           <button class="btn-mini" data-editar="${p.id}">Editar</button>
           <button class="btn-mini" data-ajustar="${p.id}">Ajustar</button>
+          <button class="btn-mini" data-historico="${p.id}">Histórico</button>
           <button class="btn-mini btn-perigo" data-excluir="${p.id}">Excluir</button>
         </td>
       </tr>`;
@@ -81,13 +120,13 @@ const ModuloEstoque = (() => {
         <span class="muted">Página ${estado.pagina} de ${paginas} — ${total} produto(s)</span>
         <button class="btn-mini" data-pag="1" ${estado.pagina >= paginas ? 'disabled' : ''}>Próxima ›</button>`;
       $('.paginacao').querySelectorAll('[data-pag]').forEach(btn =>
-        btn.addEventListener('click', () => {
-          estado.pagina += Number(btn.dataset.pag);
-          carregar();
-        }));
+        btn.addEventListener('click', () => { estado.pagina += Number(btn.dataset.pag); carregar(); }));
     }
 
-    // ---- formulário ---------------------------------------------------------
+    // Recarrega lista + KPIs após qualquer alteração
+    function reload() { carregar(); carregarKpis(); }
+
+    // ---- formulário de produto ---------------------------------------------
 
     function abrirForm(p = null) {
       const form = $('.form-produto');
@@ -122,9 +161,7 @@ const ModuloEstoque = (() => {
           <button class="btn-mini" data-acao="cancelar">Cancelar</button>
         </div>`;
 
-      form.querySelector('[data-acao=cancelar]').addEventListener('click', () => {
-        form.hidden = true;
-      });
+      form.querySelector('[data-acao=cancelar]').addEventListener('click', () => { form.hidden = true; });
       form.querySelector('[data-acao=salvar]').addEventListener('click', async () => {
         const dados = {};
         form.querySelectorAll('input[name]').forEach(i => {
@@ -136,7 +173,7 @@ const ModuloEstoque = (() => {
         if (p) dados.id = p.id;
 
         const r = await Api.call('estoque_salvar', dados);
-        if (r.ok) { form.hidden = true; carregar(); return; }
+        if (r.ok) { form.hidden = true; reload(); return; }
 
         // erros por campo, preservando o que o usuário digitou (seção 9)
         for (const [campo, msg] of Object.entries(r.field_errors || { _geral: r.error })) {
@@ -149,29 +186,110 @@ const ModuloEstoque = (() => {
       form.querySelector('input[name=nome]').focus();
     }
 
-    // ---- ações --------------------------------------------------------------
+    // ---- modal (ajuste e histórico) ----------------------------------------
 
-    async function ajustar(p) {
-      const qtd = prompt(
-        `Ajustar estoque de "${p.nome}" (atual: ${p.estoque_atual} ${p.unidade}).\n` +
-        'Digite a quantidade: positiva para entrada (ex.: 10), negativa para saída (ex.: -3).');
-      if (qtd === null || qtd.trim() === '') return;
-      const motivo = prompt('Motivo do ajuste (ex.: inventário, avaria, brinde):') || '';
-      const r = await Api.call('estoque_ajustar', p.id, qtd.trim(), motivo);
-      if (!r.ok) { alert(r.error); return; }
-      carregar();
+    function abrirModal(titulo, corpoHtml) {
+      $('.modal-titulo').textContent = titulo;
+      $('.modal-body').innerHTML = corpoHtml;
+      $('.modal-overlay').hidden = false;
+    }
+    function fecharModal() { $('.modal-overlay').hidden = true; }
+    $('.modal-close').addEventListener('click', fecharModal);
+    $('.modal-overlay').addEventListener('click', (e) => {
+      if (e.target === $('.modal-overlay')) fecharModal();
+    });
+
+    function abrirAjuste(p) {
+      abrirModal(`Ajustar estoque — ${esc(p.nome)}`, `
+        <p class="muted">Estoque atual: <strong>${Number(p.estoque_atual)} ${esc(p.unidade)}</strong></p>
+        <div class="ajuste-tipo">
+          <label class="radio"><input type="radio" name="tipo" value="entrada" checked> Entrada (+)</label>
+          <label class="radio"><input type="radio" name="tipo" value="saida"> Saída (−)</label>
+        </div>
+        <label>Quantidade</label>
+        <input name="qtd" inputmode="decimal" placeholder="Ex.: 10">
+        <label>Motivo</label>
+        <input name="motivo" list="motivos" placeholder="Ex.: inventário, avaria, brinde, compra">
+        <datalist id="motivos">
+          <option value="Compra / entrada de mercadoria">
+          <option value="Inventário / contagem">
+          <option value="Avaria / perda">
+          <option value="Brinde / bonificação">
+          <option value="Devolução de cliente">
+        </datalist>
+        <p class="field-error" data-erro="ajuste" hidden></p>
+        <div class="form-acoes">
+          <button class="btn-primary btn-inline" data-acao="confirmar">Confirmar ajuste</button>
+          <button class="btn-mini" data-acao="cancelar">Cancelar</button>
+        </div>
+      `);
+      const body = $('.modal-body');
+      body.querySelector('[data-acao=cancelar]').addEventListener('click', fecharModal);
+      body.querySelector('input[name=qtd]').focus();
+      body.querySelector('[data-acao=confirmar]').addEventListener('click', async () => {
+        const erro = body.querySelector('[data-erro=ajuste]');
+        erro.hidden = true;
+        const bruto = body.querySelector('input[name=qtd]').value.trim().replace(',', '.');
+        const num = Number(bruto);
+        if (!bruto || Number.isNaN(num) || num <= 0) {
+          erro.textContent = 'Digite uma quantidade maior que zero.';
+          erro.hidden = false; return;
+        }
+        const tipo = body.querySelector('input[name=tipo]:checked').value;
+        const qtd = tipo === 'saida' ? -num : num;
+        const motivo = body.querySelector('input[name=motivo]').value.trim();
+        const r = await Api.call('estoque_ajustar', p.id, qtd, motivo);
+        if (!r.ok) { erro.textContent = r.error; erro.hidden = false; return; }
+        fecharModal(); reload();
+      });
+    }
+
+    async function abrirHistorico(p) {
+      abrirModal(`Histórico — ${esc(p.nome)}`, '<p class="muted">Carregando…</p>');
+      const r = await Api.call('estoque_movimentos', p.id, 1);
+      const body = $('.modal-body');
+      if (!r.ok) { body.innerHTML = `<p class="field-error">${esc(r.error)}</p>`; return; }
+      const { itens, total } = r.data;
+      if (!itens.length) { body.innerHTML = '<p class="muted">Sem movimentações registradas ainda.</p>'; return; }
+      body.innerHTML = `
+        <table class="tabela">
+          <thead><tr><th>Data</th><th>Tipo</th><th>Qtd</th><th>Motivo</th><th>Usuário</th></tr></thead>
+          <tbody>${itens.map(m => `
+            <tr>
+              <td>${dataHora(m.criado_em)}</td>
+              <td>${rotuloTipo(m.tipo)}</td>
+              <td class="${Number(m.quantidade) < 0 ? 'btn-perigo' : ''}">${Number(m.quantidade) > 0 ? '+' : ''}${Number(m.quantidade)}</td>
+              <td>${esc(m.motivo) || '—'}</td>
+              <td>${esc(m.usuarios?.nome) || '—'}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+        <p class="muted" style="margin-top:8px">${total} movimento(s).</p>`;
+    }
+
+    function rotuloTipo(t) {
+      return { entrada: 'Entrada', saida: 'Saída', ajuste: 'Ajuste' }[t] || esc(t);
+    }
+    function dataHora(iso) {
+      try { return new Date(iso).toLocaleString('pt-BR'); }
+      catch { return esc(iso); }
     }
 
     async function excluir(p) {
       if (!confirm(`Excluir "${p.nome}"?\nO produto sai da lista, mas o histórico de movimentações fica guardado.`)) return;
       const r = await Api.call('estoque_desativar', p.id);
       if (!r.ok) { alert(r.error); return; }
-      carregar();
+      reload();
     }
 
     // ---- eventos ------------------------------------------------------------
 
     $('[data-acao=novo]').addEventListener('click', () => abrirForm());
+
+    $('[data-filtro=baixo]').addEventListener('change', (e) => {
+      estado.so_baixo = e.target.checked;
+      estado.pagina = 1;
+      carregar();
+    });
 
     let timer;
     $('.busca').addEventListener('input', (e) => {
@@ -183,6 +301,7 @@ const ModuloEstoque = (() => {
       }, 300);
     });
 
+    carregarKpis();
     carregar();
   }
 

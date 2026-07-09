@@ -9,6 +9,7 @@
 create or replace function public.cnpj_valido(p_cnpj text)
 returns boolean
 language plpgsql immutable
+set search_path = public
 as $$
 declare
   d   int[];

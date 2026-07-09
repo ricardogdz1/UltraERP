@@ -113,13 +113,29 @@ class ApiBridge:
     def _token(self) -> str | None:
         return self._session.access_token if self._session else None
 
-    def estoque_listar(self, pagina: int = 1, busca: str = "") -> dict:
+    def estoque_listar(self, pagina: int = 1, busca: str = "", so_baixo: bool = False) -> dict:
         if not self._token():
             return _err("Faça login para continuar.")
         try:
-            return _ok(estoque.listar(self._token(), int(pagina or 1), busca or ""))
+            return _ok(estoque.listar(self._token(), int(pagina or 1), busca or "", bool(so_baixo)))
         except httpx.HTTPError:
             return _err("Não foi possível carregar os produtos. Verifique sua internet e tente novamente.")
+
+    def estoque_resumo(self) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            return _ok(estoque.resumo(self._token()))
+        except httpx.HTTPError:
+            return _err("Não foi possível carregar o resumo do estoque. Tente novamente.")
+
+    def estoque_movimentos(self, produto_id: str, pagina: int = 1) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            return _ok(estoque.movimentos(self._token(), produto_id, int(pagina or 1)))
+        except httpx.HTTPError:
+            return _err("Não foi possível carregar o histórico. Verifique sua internet e tente novamente.")
 
     def estoque_salvar(self, produto: dict) -> dict:
         if not self._token():

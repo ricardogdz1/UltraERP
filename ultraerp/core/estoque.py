@@ -56,13 +56,27 @@ _demo: list[dict] = [
 
 # ---------------- operações ----------------
 
-def listar(access_token: str, pagina: int = 1, busca: str = "") -> dict:
-    """Lista paginada de produtos ativos. Retorna {itens, total, pagina}."""
+def _demo_baixo(p: dict) -> bool:
+    return float(p["estoque_atual"]) <= float(p["estoque_minimo"])
+
+
+def listar(access_token: str, pagina: int = 1, busca: str = "",
+           so_baixo: bool = False) -> dict:
+    """Lista paginada de produtos ativos. Retorna {itens, total, pagina}.
+
+    `so_baixo=True` restringe aos produtos no/abaixo do estoque mínimo
+    (visão de ruptura). A sinalização vem da view vw_produtos, que já
+    respeita a RLS por loja (security_invoker).
+    """
     if settings.demo_mode:
         itens = [p for p in _demo if p["ativo"]]
         if busca:
             itens = [p for p in itens if busca.lower() in p["nome"].lower()
                      or busca == p["ean"]]
+        if so_baixo:
+            itens = [p for p in itens if _demo_baixo(p)]
+        for p in itens:
+            p["abaixo_minimo"] = _demo_baixo(p)
         itens.sort(key=lambda p: p["nome"].lower())
         return {"itens": itens[(pagina - 1) * PAGE_SIZE: pagina * PAGE_SIZE],
                 "total": len(itens), "pagina": pagina}
@@ -77,9 +91,49 @@ def listar(access_token: str, pagina: int = 1, busca: str = "") -> dict:
     if busca:
         # busca por nome (parcial) ou EAN exato
         params["or"] = f"(nome.ilike.*{busca}*,ean.eq.{busca})"
+    if so_baixo:
+        params["abaixo_minimo"] = "eq.true"
 
+    # Lê da view (traz o booleano abaixo_minimo); escrita continua em produtos.
     resp = httpx.get(
-        _url("produtos"), params=params,
+        _url("vw_produtos"), params=params,
+        headers={**_headers(access_token), "Prefer": "count=exact"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    total = int(resp.headers.get("content-range", "0/0").split("/")[-1] or 0)
+    return {"itens": resp.json(), "total": total, "pagina": pagina}
+
+
+def resumo(access_token: str) -> dict:
+    """KPIs do estoque: total, quantos abaixo do mínimo, valor em custo/venda."""
+    if settings.demo_mode:
+        ativos = [p for p in _demo if p["ativo"]]
+        return {
+            "total": len(ativos),
+            "abaixo_minimo": sum(1 for p in ativos if _demo_baixo(p)),
+            "valor_custo": sum(p["preco_custo"] * p["estoque_atual"] for p in ativos),
+            "valor_venda": sum(p["preco_venda"] * p["estoque_atual"] for p in ativos),
+        }
+    resp = httpx.post(_url("rpc/estoque_resumo"), json={},
+                      headers=_headers(access_token), timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def movimentos(access_token: str, produto_id: str, pagina: int = 1) -> dict:
+    """Histórico de entradas/saídas/ajustes de um produto (mais recentes primeiro)."""
+    if settings.demo_mode:
+        return {"itens": [], "total": 0, "pagina": pagina}
+    params = {
+        "select": "id,tipo,quantidade,motivo,criado_em,usuarios(nome)",
+        "produto_id": f"eq.{produto_id}",
+        "order": "criado_em.desc",
+        "limit": str(PAGE_SIZE),
+        "offset": str((pagina - 1) * PAGE_SIZE),
+    }
+    resp = httpx.get(
+        _url("estoque_movimentos"), params=params,
         headers={**_headers(access_token), "Prefer": "count=exact"},
         timeout=15,
     )
