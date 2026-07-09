@@ -23,7 +23,14 @@ def main() -> None:
         min_size=(1024, 640),
     )
     bridge.attach(window)
-    webview.start(debug=settings.debug)
+    # private_mode=False + storage_path estável: preserva o localStorage entre
+    # execuções (e-mail lembrado, tema). Em modo privado o WebView apaga tudo
+    # ao fechar — era por isso que "lembrar e-mail/senha" não funcionava.
+    webview.start(
+        debug=settings.debug,
+        private_mode=False,
+        storage_path=settings.storage_dir,
+    )
 
 
 if __name__ == "__main__":

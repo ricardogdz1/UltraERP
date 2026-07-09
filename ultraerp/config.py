@@ -7,6 +7,7 @@ modo demonstração (interface funcional, sem banco), útil para desenvolver a U
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -16,6 +17,17 @@ BASE_DIR = Path(__file__).resolve().parent
 UI_DIR = BASE_DIR / "ui"
 
 load_dotenv(BASE_DIR.parent / ".env")
+
+
+def _user_data_dir() -> Path:
+    """Pasta de dados do app por usuário do SO (padrão de cada plataforma)."""
+    if sys.platform == "win32":
+        base = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
+    elif sys.platform == "darwin":
+        base = str(Path.home() / "Library" / "Application Support")
+    else:
+        base = os.getenv("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "UltraERP"
 
 
 @dataclass(frozen=True)
@@ -29,6 +41,14 @@ class Settings:
     def demo_mode(self) -> bool:
         """Sem credenciais → modo demonstração (nunca usar em produção)."""
         return not (self.supabase_url and self.supabase_anon_key)
+
+    @property
+    def storage_dir(self) -> str:
+        """Pasta persistente do WebView (localStorage: e-mail lembrado, tema).
+        Fora do modo privado, precisa de um caminho estável entre execuções.
+        Nada sensível vai aqui: senha fica no cofre do SO; token, só em memória.
+        """
+        return str(_user_data_dir() / "webview")
 
 
 settings = Settings()
