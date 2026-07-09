@@ -9,21 +9,22 @@
 3. Em **Authentication → Providers**, deixe apenas *Email* habilitado (Fase 1) e desative *Confirm email* durante o desenvolvimento.
 4. Em **Settings → API**, copie a *URL* e a *anon key* para o `.env` do app. Em **Settings → Database**, copie a connection string do *pooler* (porta 6543) para `DATABASE_URL`.
 
-## Criar uma loja de teste
+## Criar uma loja (onboarding)
 
-O onboarding automatizado virá depois; por ora, crie manualmente no SQL Editor (após registrar um usuário pela tela de login do app ou em Authentication → Users):
+Registre um usuário (signup pelo app ou `POST /auth/v1/signup`) e chame a RPC
+`onboarding_criar_loja` autenticado — ela valida o CNPJ (dígito verificador,
+no servidor), cria a loja, vincula o usuário como administrador e inicia o
+trial de 14 dias, tudo numa transação:
 
 ```sql
-insert into lojas (cnpj, razao_social, uf)
-values ('11222333000181', 'Minha Loja Teste', 'SP')
-returning id;
-
--- use o id retornado acima e o UUID do usuário em Authentication → Users
-insert into usuarios (auth_id, loja_id, nome, email)
-values ('UUID-DO-AUTH-USER', 'UUID-DA-LOJA', 'Seu Nome', 'seu@email.com');
-
-insert into assinaturas (loja_id) values ('UUID-DA-LOJA');  -- inicia trial de 14 dias
+select onboarding_criar_loja(
+  p_cnpj => '11.222.333/0001-81', p_razao_social => 'Minha Loja Teste LTDA',
+  p_uf => 'SP', p_nome_usuario => 'Seu Nome', p_nome_fantasia => 'Loja Teste');
 ```
+
+Loja de teste já criada no projeto: usuário `teste@ultraerp.dev`
+(senha `TesteUltra123!`), CNPJ 11.222.333/0001-81, com um produto e
+movimentos de estoque de exemplo.
 
 ## Decisões de segurança embutidas (especificação, seções 7 e 13)
 
@@ -36,9 +37,22 @@ insert into assinaturas (loja_id) values ('UUID-DA-LOJA');  -- inicia trial de 1
 
 Migrações aplicadas e testadas em PostgreSQL real (embutido, via `pgserver`): isolamento RLS entre duas lojas, RPC nos estados `ativo`, `trial vencido → bloqueado`, e tentativa de fraude por UPDATE direto — todos com o resultado esperado.
 
+## Webhook de pagamento (Asaas)
+
+Edge Function `asaas-webhook` (código em `functions/asaas-webhook/index.ts`)
+publicada em `https://ofgmniqzqrmetxlbznfe.supabase.co/functions/v1/asaas-webhook`.
+Roda com service_role e é o único caminho que altera `assinaturas`:
+pagamento confirmado → `ativa` + `pago_ate` estendido; vencido →
+`inadimplente`; estorno/chargeback → revoga o período pago na hora.
+Sem o header `asaas-access-token` correto, responde 401 (testado).
+
+Para ativar, falta apenas (manual, no painel de cada serviço):
+1. Criar a conta no Asaas e configurar o webhook de cobranças apontando para a URL acima, definindo um token de autenticação.
+2. Salvar esse mesmo token como secret `ASAAS_WEBHOOK_TOKEN` em Edge Functions → Secrets no dashboard do Supabase.
+3. Ao criar cobranças/assinaturas no Asaas, preencher `externalReference` com o `lojas.id`.
+
 ## Pendências (próximas etapas)
 
-- Webhook do gateway de pagamento (Asaas/Iugu/Stripe) atualizando `assinaturas` via Edge Function com service_role.
-- RPC de onboarding (criar loja + vincular primeiro usuário como administrador).
 - RPCs de gestão de usuários (convidar, trocar papel) com checagem de papel administrador.
 - Token de graça offline assinado pelo servidor (48–72h).
+- Idempotência/registro de eventos recebidos no webhook (tabela de eventos processados).
