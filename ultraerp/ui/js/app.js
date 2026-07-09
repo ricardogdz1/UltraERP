@@ -227,6 +227,7 @@
   // Módulos com tela própria; os demais caem no placeholder
   const MODULE_RENDERERS = {
     estoque: (panel) => ModuloEstoque.render(panel),
+    pdv: (panel) => ModuloPDV.render(panel),
   };
 
   function openModule(mod) {

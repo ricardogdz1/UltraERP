@@ -14,7 +14,7 @@ import httpx
 
 from ultraerp import __version__
 from ultraerp.config import settings
-from ultraerp.core import auth, credentials, estoque, licensing, onboarding, prefs, validacao
+from ultraerp.core import auth, credentials, estoque, licensing, onboarding, pdv, prefs, validacao
 
 # Módulos da Fase 1 (roadmap, seção 15). IDs usados pelo front para abrir abas.
 MODULES_FASE1 = [
@@ -233,3 +233,24 @@ class ApiBridge:
         if not resultado.get("ok"):
             return _err(resultado.get("error", "Não foi possível ajustar o estoque."))
         return _ok({"estoque_atual": resultado["estoque_atual"]})
+
+    # ---- PDV --------------------------------------------------------------
+
+    def pdv_finalizar(self, itens: list, forma: str, valor_recebido=None) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        if not itens:
+            return _err("Adicione ao menos um produto para finalizar a venda.")
+        valor = None
+        if valor_recebido not in (None, ""):
+            try:
+                valor = float(str(valor_recebido).replace(",", "."))
+            except (TypeError, ValueError):
+                return _err("Valor recebido inválido — use números (ex.: 50,00).")
+        try:
+            resultado = pdv.finalizar(self._token(), itens, forma, valor)
+        except httpx.HTTPError:
+            return _err("Não foi possível finalizar a venda. Verifique sua internet e tente novamente.")
+        if not resultado.get("ok"):
+            return _err(resultado.get("error", "Não foi possível finalizar a venda."))
+        return _ok(resultado)
