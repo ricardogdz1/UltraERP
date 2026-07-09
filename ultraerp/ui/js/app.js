@@ -74,6 +74,7 @@
 
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    console.log('[login] submit disparado');
     loginError.hidden = true;
     emailInput.classList.remove('invalid');
     passInput.classList.remove('invalid');
@@ -85,18 +86,33 @@
 
     loginBtn.disabled = true;
     loginBtn.textContent = 'Entrando…';
+    console.log('[login] chamando bridge.login…');
     const r = await Api.call('login', emailInput.value.trim(), passInput.value);
+    console.log('[login] resposta da bridge:', r);
     loginBtn.disabled = false;
     loginBtn.textContent = 'Entrar';
 
     if (!r.ok) return showFieldError(r.error, passInput);
-    await persistCredentials(emailInput.value.trim(), passInput.value);
-    enterShell(r.data);
+    // Abrir a tela principal é o que importa; guardar as credenciais é um
+    // extra que nunca deve impedir o acesso. Por isso o shell abre primeiro,
+    // e o persist roda depois sem bloquear.
+    try {
+      await enterShell(r.data);
+      console.log('[login] enterShell concluído');
+    } catch (err) {
+      console.error('[login] enterShell falhou:', err);
+      showFieldError('Login ok, mas houve um erro ao abrir a tela principal: ' + (err && err.message ? err.message : err), null);
+      return;
+    }
+    persistCredentials(emailInput.value.trim(), passInput.value).catch((err) =>
+      console.error('[login] persistCredentials falhou (ignorado):', err)
+    );
   });
 
   // ---- shell ---------------------------------------------------------------
 
   async function enterShell(session) {
+    console.log('[shell] entrando na tela principal…');
     viewLogin.hidden = true;
     viewShell.hidden = false;
     $('#user-email').textContent = session.email;
