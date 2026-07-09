@@ -43,12 +43,9 @@ class Settings:
         return not (self.supabase_url and self.supabase_anon_key)
 
     @property
-    def storage_dir(self) -> str:
-        """Pasta persistente do WebView (localStorage: e-mail lembrado, tema).
-        Fora do modo privado, precisa de um caminho estável entre execuções.
-        Nada sensível vai aqui: senha fica no cofre do SO; token, só em memória.
-        """
-        return str(_user_data_dir() / "webview")
+    def data_dir(self) -> Path:
+        """Pasta de dados do app por usuário do SO (preferências etc.)."""
+        return _user_data_dir()
 
 
 settings = Settings()

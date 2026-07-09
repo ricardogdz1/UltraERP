@@ -14,7 +14,7 @@ import httpx
 
 from ultraerp import __version__
 from ultraerp.config import settings
-from ultraerp.core import auth, credentials, estoque, licensing, validacao
+from ultraerp.core import auth, credentials, estoque, licensing, onboarding, prefs, validacao
 
 # Módulos da Fase 1 (roadmap, seção 15). IDs usados pelo front para abrir abas.
 MODULES_FASE1 = [
@@ -74,6 +74,50 @@ class ApiBridge:
             }
         )
 
+    def cadastrar(self, dados: dict) -> dict:
+        """Cria conta (signup) + loja (onboarding) e entra. Retorna como login.
+
+        Erros por campo seguem o padrão {field_errors} para a UI destacar
+        cada campo (especificação, seção 9).
+        """
+        dados = dados or {}
+        erros = validacao.validar_cadastro(dados)
+        if erros:
+            return {"ok": False, "field_errors": erros,
+                    "error": "Alguns campos precisam de atenção — veja as mensagens abaixo deles."}
+
+        email = (dados.get("email") or "").strip()
+
+        # Reaproveita a sessão se o signup já ocorreu numa tentativa anterior
+        # (ex.: onboarding falhou por CNPJ duplicado e o usuário corrigiu):
+        # evita "e-mail já cadastrado" ao reenviar.
+        if not (self._session and self._session.email == email):
+            try:
+                self._session = auth.signup(email, dados.get("senha") or "")
+            except auth.AuthError as exc:
+                return {"ok": False, "field_errors": {"email": str(exc)}, "error": str(exc)}
+
+        try:
+            res = onboarding.criar_loja(self._session.access_token, dados)
+        except httpx.HTTPError:
+            return _err("Sua conta foi criada, mas não conseguimos cadastrar a loja agora. "
+                        "Verifique sua internet e tente novamente.")
+
+        if not res.get("ok"):
+            msg = res.get("error", "Não foi possível cadastrar a loja.")
+            # A maioria das rejeições do servidor é sobre o CNPJ.
+            return {"ok": False, "field_errors": {"cnpj": msg}, "error": msg}
+
+        self._license = licensing.check_subscription(self._session.access_token)
+        return _ok({
+            "email": self._session.email,
+            "license": {
+                "status": self._license.status,
+                "plan": self._license.plan,
+                "message": self._license.message,
+            },
+        })
+
     def logout(self) -> dict:
         self._session = None
         self._license = None
@@ -99,6 +143,15 @@ class ApiBridge:
 
     def credentials_delete(self, email: str) -> dict:
         credentials.delete_password(email)
+        return _ok()
+
+    # ---- preferências locais (e-mail lembrado, tema) ----------------------
+
+    def prefs_get(self) -> dict:
+        return _ok(prefs.load())
+
+    def prefs_set(self, updates: dict) -> dict:
+        prefs.save(updates or {})
         return _ok()
 
     # ---- módulos ---------------------------------------------------------

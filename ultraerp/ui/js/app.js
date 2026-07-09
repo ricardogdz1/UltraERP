@@ -5,6 +5,7 @@
 
   const viewLogin = $('#view-login');
   const viewShell = $('#view-shell');
+  const viewCadastro = $('#view-cadastro');
   const loginForm = $('#login-form');
   const loginBtn = $('#login-btn');
   const loginError = $('#login-error');
@@ -14,44 +15,42 @@
   const rememberPass = $('#remember-password');
 
   // ---- lembrar e-mail/senha ------------------------------------------------
-  // E-mail (não sensível): localStorage. Senha: cofre nativo do SO via bridge
-  // — nunca em localStorage ou arquivo texto (especificação, seção 13).
-
-  const KEY_EMAIL = 'ultraerp.login.email';
-  const KEY_REMEMBER_PASS = 'ultraerp.login.rememberPass';
+  // Preferências (e-mail lembrado, flags) ficam no lado Python (core/prefs.py),
+  // que persiste em arquivo e independe do WebView (roda em modo privado).
+  // A senha vai para o cofre nativo do SO — nunca em arquivo de texto
+  // (especificação, seção 13). O token de sessão só vive em memória.
 
   async function prefillCredentials() {
-    const savedEmail = localStorage.getItem(KEY_EMAIL);
-    if (!savedEmail) return;
-    emailInput.value = savedEmail;
-    rememberEmail.checked = true;
-    if (localStorage.getItem(KEY_REMEMBER_PASS) === '1') {
+    const pr = await Api.call('prefs_get');
+    const p = (pr.ok && pr.data) || {};
+    if (p.remember_email && p.email) {
+      emailInput.value = p.email;
+      rememberEmail.checked = true;
+    }
+    if (p.remember_password && p.email) {
       rememberPass.checked = true;
-      const r = await Api.call('credentials_get', savedEmail);
+      const r = await Api.call('credentials_get', p.email);
       if (r.ok && r.data.password) passInput.value = r.data.password;
     }
-    passInput.focus();
+    if (emailInput.value) passInput.focus();
   }
 
   async function persistCredentials(email, password) {
-    if (rememberEmail.checked || rememberPass.checked) {
-      localStorage.setItem(KEY_EMAIL, email); // lembrar senha implica lembrar e-mail
-      rememberEmail.checked = true;
-    } else {
-      localStorage.removeItem(KEY_EMAIL);
-    }
+    const lembrarEmail = rememberEmail.checked || rememberPass.checked;
+    await Api.call('prefs_set', {
+      email: lembrarEmail ? email : '',
+      remember_email: lembrarEmail,
+      remember_password: rememberPass.checked,
+    });
     if (rememberPass.checked) {
       const r = await Api.call('credentials_save', email, password);
-      if (r.ok) {
-        localStorage.setItem(KEY_REMEMBER_PASS, '1');
-      } else {
+      if (!r.ok) {
         // Cofre do SO indisponível: avisa, mas não impede o uso
-        localStorage.removeItem(KEY_REMEMBER_PASS);
         rememberPass.checked = false;
+        await Api.call('prefs_set', { remember_password: false });
         alert(r.error);
       }
     } else {
-      localStorage.removeItem(KEY_REMEMBER_PASS);
       await Api.call('credentials_delete', email);
     }
   }
@@ -103,6 +102,93 @@
     persistCredentials(emailInput.value.trim(), passInput.value).catch((err) =>
       console.error('persistCredentials falhou (ignorado):', err)
     );
+  });
+
+  // ---- cadastro (conta + loja) --------------------------------------------
+
+  const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
+    'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+
+  const cadastroForm = $('#cadastro-form');
+  const cadastroBtn = $('#cadastro-btn');
+  const cadastroError = $('#cadastro-error');
+
+  // Preenche o <select> de UF uma vez
+  {
+    const sel = $('#cad-uf');
+    for (const uf of UFS) {
+      const opt = document.createElement('option');
+      opt.value = uf; opt.textContent = uf;
+      sel.appendChild(opt);
+    }
+  }
+
+  function mostrarCadastro() {
+    limparErrosCadastro();
+    viewLogin.hidden = true;
+    viewCadastro.hidden = false;
+    $('#cad-email').focus();
+  }
+  function mostrarLogin() {
+    viewCadastro.hidden = true;
+    viewLogin.hidden = false;
+  }
+  $('#ir-cadastro').addEventListener('click', (e) => { e.preventDefault(); mostrarCadastro(); });
+  $('#ir-login').addEventListener('click', (e) => { e.preventDefault(); mostrarLogin(); });
+
+  // Máscara de CNPJ: 00.000.000/0000-00 (só dígitos, formatado ao digitar)
+  $('#cad-cnpj').addEventListener('input', (e) => {
+    const d = e.target.value.replace(/\D/g, '').slice(0, 14);
+    let out = d;
+    if (d.length > 2)  out = d.slice(0, 2) + '.' + d.slice(2);
+    if (d.length > 5)  out = out.slice(0, 6) + '.' + d.slice(5);
+    if (d.length > 8)  out = out.slice(0, 10) + '/' + d.slice(8);
+    if (d.length > 12) out = out.slice(0, 15) + '-' + d.slice(12);
+    e.target.value = out;
+  });
+
+  function limparErrosCadastro() {
+    cadastroError.hidden = true;
+    cadastroForm.querySelectorAll('[data-erro]').forEach((e) => (e.hidden = true));
+    cadastroForm.querySelectorAll('.invalid').forEach((e) => e.classList.remove('invalid'));
+  }
+
+  cadastroForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    limparErrosCadastro();
+
+    const dados = {};
+    cadastroForm.querySelectorAll('[name]').forEach((i) => { dados[i.name] = i.value; });
+
+    cadastroBtn.disabled = true;
+    cadastroBtn.textContent = 'Criando…';
+    const r = await Api.call('cadastrar', dados);
+    cadastroBtn.disabled = false;
+    cadastroBtn.textContent = 'Criar conta e entrar';
+
+    if (r.ok) {
+      viewCadastro.hidden = true;
+      try {
+        await enterShell(r.data);
+      } catch (err) {
+        console.error('enterShell (cadastro) falhou:', err);
+        mostrarLogin();
+        showFieldError('Conta criada! Faça login para entrar.', null);
+      }
+      return;
+    }
+
+    // erros por campo (seção 9), preservando o que foi digitado
+    const campos = r.field_errors || { _geral: r.error };
+    let primeiro = null;
+    for (const [campo, msg] of Object.entries(campos)) {
+      const el = cadastroForm.querySelector(`[data-erro="${campo}"]`);
+      if (el) { el.textContent = msg; el.hidden = false; }
+      const input = cadastroForm.querySelector(`[name="${campo}"]`);
+      if (input) { input.classList.add('invalid'); primeiro = primeiro || input; }
+    }
+    if (primeiro) primeiro.focus();
+    else { cadastroError.textContent = r.error || 'Não foi possível concluir o cadastro.'; cadastroError.hidden = false; }
   });
 
   // ---- shell ---------------------------------------------------------------

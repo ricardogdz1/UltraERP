@@ -31,7 +31,57 @@
         <p id="login-error" class="field-error" hidden></p>
         <button type="submit" id="login-btn" class="btn-primary">Entrar</button>
       </form>
+      <p class="login-alt">Ainda não tem conta?
+        <a href="#" id="ir-cadastro">Criar conta</a></p>
       <p id="demo-badge" class="demo-badge" hidden>Modo demonstração — sem servidor configurado</p>
+    </div>
+  </div>
+
+  <!-- Tela de cadastro (conta + loja) -->
+  <div id="view-cadastro" class="view" hidden>
+    <div class="login-card cadastro-card">
+      <h1 class="login-logo">Ultra<span>ERP</span></h1>
+      <p class="login-sub">Crie sua conta e comece o teste grátis de 14 dias</p>
+      <form id="cadastro-form" novalidate>
+        <fieldset class="cad-secao">
+          <legend>Seus dados de acesso</legend>
+          <div class="grid-2">
+            <div><label for="cad-email">E-mail *</label>
+              <input id="cad-email" name="email" type="email" autocomplete="email" placeholder="nome@empresa.com.br">
+              <p class="field-error" data-erro="email" hidden></p></div>
+            <div><label for="cad-nome">Seu nome *</label>
+              <input id="cad-nome" name="nome_usuario" placeholder="Como você quer ser chamado">
+              <p class="field-error" data-erro="nome_usuario" hidden></p></div>
+            <div><label for="cad-senha">Senha * <span class="hint" title="Pelo menos 6 caracteres.">?</span></label>
+              <input id="cad-senha" name="senha" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+              <p class="field-error" data-erro="senha" hidden></p></div>
+            <div><label for="cad-senha2">Confirmar senha *</label>
+              <input id="cad-senha2" name="senha2" type="password" autocomplete="new-password" placeholder="Repita a senha">
+              <p class="field-error" data-erro="senha2" hidden></p></div>
+          </div>
+        </fieldset>
+        <fieldset class="cad-secao">
+          <legend>Dados da loja</legend>
+          <div class="grid-2">
+            <div><label for="cad-cnpj">CNPJ *</label>
+              <input id="cad-cnpj" name="cnpj" inputmode="numeric" placeholder="00.000.000/0000-00">
+              <p class="field-error" data-erro="cnpj" hidden></p></div>
+            <div><label for="cad-uf">Estado (UF) *</label>
+              <select id="cad-uf" name="uf">
+                <option value="">Selecione…</option>
+              </select>
+              <p class="field-error" data-erro="uf" hidden></p></div>
+            <div><label for="cad-razao">Razão social *</label>
+              <input id="cad-razao" name="razao_social" placeholder="Nome da empresa no CNPJ">
+              <p class="field-error" data-erro="razao_social" hidden></p></div>
+            <div><label for="cad-fantasia">Nome fantasia</label>
+              <input id="cad-fantasia" name="nome_fantasia" placeholder="Nome que aparece na loja (opcional)"></div>
+          </div>
+        </fieldset>
+        <p id="cadastro-error" class="field-error" hidden></p>
+        <button type="submit" id="cadastro-btn" class="btn-primary">Criar conta e entrar</button>
+      </form>
+      <p class="login-alt">Já tem conta? <a href="#" id="ir-login">Voltar ao login</a></p>
     </div>
   </div>
 

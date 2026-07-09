@@ -1,7 +1,9 @@
-/* Tema claro/escuro: segue o SO por padrão, com alternância manual persistida. */
+/* Tema claro/escuro: segue o SO por padrão, com alternância manual salva nas
+   preferências (lado Python), pois o WebView roda em modo privado e não
+   preserva localStorage entre execuções. */
 
 const Theme = (() => {
-  const KEY = 'ultraerp.theme';
+  let manual = false; // usuário escolheu manualmente? (então não segue o SO)
 
   function systemTheme() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -11,17 +13,21 @@ const Theme = (() => {
     document.documentElement.dataset.theme = theme;
   }
 
-  function init() {
-    apply(localStorage.getItem(KEY) || systemTheme());
+  async function init() {
+    apply(systemTheme()); // aplica o do SO já, para não piscar
+    const pr = await Api.call('prefs_get');
+    const salvo = pr.ok && pr.data && pr.data.theme;
+    if (salvo) { manual = true; apply(salvo); }
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      if (!localStorage.getItem(KEY)) apply(systemTheme());
+      if (!manual) apply(systemTheme());
     });
   }
 
-  function toggle() {
+  async function toggle() {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem(KEY, next);
+    manual = true;
     apply(next);
+    await Api.call('prefs_set', { theme: next });
   }
 
   return { init, toggle };
