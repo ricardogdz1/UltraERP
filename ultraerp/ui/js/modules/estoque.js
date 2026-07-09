@@ -8,6 +8,43 @@ const ModuloEstoque = (() => {
   const brl = (v) =>
     Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  // ---- máscaras de entrada: o campo só aceita o que é permitido ------------
+
+  function soDigitos(input, max) {
+    if (!input) return;
+    input.maxLength = max;
+    input.setAttribute('inputmode', 'numeric');
+    input.addEventListener('input', () => {
+      const limpo = input.value.replace(/\D/g, '').slice(0, max);
+      if (input.value !== limpo) input.value = limpo;
+    });
+  }
+
+  function soDecimal(input, max) {
+    if (!input) return;
+    input.maxLength = max;
+    input.setAttribute('inputmode', 'decimal');
+    input.addEventListener('input', () => {
+      // mantém dígitos e no máximo UM separador decimal (vírgula ou ponto)
+      const m = input.value.replace(/[^\d.,]/g, '').match(/^(\d*)([.,]?)(\d*)/);
+      const v = (m ? m[1] + m[2] + m[3] : '').slice(0, max);
+      if (input.value !== v) input.value = v;
+    });
+  }
+
+  function maiusculas(input, max) {
+    if (!input) return;
+    input.maxLength = max;
+    input.addEventListener('input', () => {
+      const v = input.value.toUpperCase().slice(0, max);
+      if (input.value !== v) input.value = v;
+    });
+  }
+
+  function limite(input, max) {
+    if (input) input.maxLength = max;
+  }
+
   function render(panel) {
     panel.innerHTML = `
       <div class="mod-header">
@@ -161,6 +198,15 @@ const ModuloEstoque = (() => {
           <button class="btn-mini" data-acao="cancelar">Cancelar</button>
         </div>`;
 
+      // máscaras: cada campo só aceita o permitido, com limite de tamanho
+      limite(form.querySelector('input[name=nome]'), 120);
+      soDigitos(form.querySelector('input[name=ean]'), 14);   // EAN/GTIN: até 14 dígitos
+      soDigitos(form.querySelector('input[name=ncm]'), 8);    // NCM: 8 dígitos
+      maiusculas(form.querySelector('input[name=unidade]'), 6);
+      soDecimal(form.querySelector('input[name=preco_custo]'), 12);
+      soDecimal(form.querySelector('input[name=preco_venda]'), 12);
+      soDecimal(form.querySelector('input[name=estoque_minimo]'), 10);
+
       form.querySelector('[data-acao=cancelar]').addEventListener('click', () => { form.hidden = true; });
       form.querySelector('[data-acao=salvar]').addEventListener('click', async () => {
         const dados = {};
@@ -224,6 +270,8 @@ const ModuloEstoque = (() => {
         </div>
       `);
       const body = $('.modal-body');
+      soDecimal(body.querySelector('input[name=qtd]'), 10);
+      limite(body.querySelector('input[name=motivo]'), 80);
       body.querySelector('[data-acao=cancelar]').addEventListener('click', fecharModal);
       body.querySelector('input[name=qtd]').focus();
       body.querySelector('[data-acao=confirmar]').addEventListener('click', async () => {
