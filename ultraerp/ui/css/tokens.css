@@ -1,0 +1,48 @@
+/* Design tokens do UltraERP — fonte única de cor, tipografia e espaçamento.
+   Tema controlado por [data-theme="light|dark"] no <html>. */
+
+:root {
+  --font: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 18px;
+  --text-xl: 26px;
+}
+
+[data-theme="light"] {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #eceff3;
+  --border: #d8dee6;
+  --text: #1c2430;
+  --text-muted: #5b6675;
+  --primary: #2563eb;
+  --primary-contrast: #ffffff;
+  --danger: #dc2626;
+  --warning-bg: #fef3c7;
+  --warning-text: #92400e;
+}
+
+[data-theme="dark"] {
+  --bg: #12161c;
+  --surface: #1a2028;
+  --surface-2: #232b35;
+  --border: #313b47;
+  --text: #e7ecf2;
+  --text-muted: #94a1b0;
+  --primary: #3b82f6;
+  --primary-contrast: #ffffff;
+  --danger: #f87171;
+  --warning-bg: #3a2f14;
+  --warning-text: #fbbf24;
+}

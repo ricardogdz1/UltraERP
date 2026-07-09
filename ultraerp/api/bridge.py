@@ -1,0 +1,166 @@
+"""Bridge JS ↔ Python exposta ao front-end via `pywebview.api`.
+
+Todo método retorna dict serializável em JSON no formato:
+  {"ok": True, "data": ...}  ou  {"ok": False, "error": "mensagem amigável"}
+
+As mensagens de erro são escritas para o lojista leigo (especificação, seção 9).
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import httpx
+
+from ultraerp import __version__
+from ultraerp.config import settings
+from ultraerp.core import auth, credentials, estoque, licensing, validacao
+
+# Módulos da Fase 1 (roadmap, seção 15). IDs usados pelo front para abrir abas.
+MODULES_FASE1 = [
+    {"id": "dashboard", "label": "Dashboard", "icon": "layout-dashboard"},
+    {"id": "estoque", "label": "Estoque", "icon": "package"},
+    {"id": "pdv", "label": "PDV", "icon": "shopping-cart"},
+    {"id": "caixa", "label": "Fluxo de Caixa", "icon": "wallet"},
+    {"id": "financeiro", "label": "Financeiro", "icon": "banknote"},
+    {"id": "fiscal", "label": "Fiscal", "icon": "file-text"},
+]
+
+
+def _ok(data: Any = None) -> dict:
+    return {"ok": True, "data": data}
+
+
+def _err(message: str) -> dict:
+    return {"ok": False, "error": message}
+
+
+class ApiBridge:
+    def __init__(self) -> None:
+        self._window = None
+        self._session: auth.Session | None = None
+        self._license: licensing.LicenseStatus | None = None
+
+    def attach(self, window) -> None:
+        self._window = window
+
+    # ---- infra -----------------------------------------------------------
+
+    def ping(self) -> dict:
+        return _ok({"version": __version__, "demo_mode": settings.demo_mode})
+
+    # ---- autenticação ----------------------------------------------------
+
+    def login(self, email: str, password: str) -> dict:
+        if not email or "@" not in email:
+            return _err("Digite um e-mail válido — ex.: nome@empresa.com.br")
+        if not password and not settings.demo_mode:
+            return _err("Digite sua senha.")
+        try:
+            self._session = auth.login(email, password)
+        except auth.AuthError as exc:
+            return _err(str(exc))
+
+        # Assinatura sempre confirmada no servidor após o login (seção 7.3)
+        self._license = licensing.check_subscription(self._session.access_token)
+        return _ok(
+            {
+                "email": self._session.email,
+                "license": {
+                    "status": self._license.status,
+                    "plan": self._license.plan,
+                    "message": self._license.message,
+                },
+            }
+        )
+
+    def logout(self) -> dict:
+        self._session = None
+        self._license = None
+        return _ok()
+
+    def get_session(self) -> dict:
+        if self._session is None:
+            return _ok(None)
+        return _ok({"email": self._session.email})
+
+    # ---- credenciais lembradas (cofre nativo do SO) ------------------------
+
+    def credentials_get(self, email: str) -> dict:
+        """Senha lembrada para preencher o formulário. Login segue no servidor."""
+        return _ok({"password": credentials.get_password(email)})
+
+    def credentials_save(self, email: str, password: str) -> dict:
+        try:
+            credentials.save_password(email, password)
+            return _ok()
+        except credentials.CredentialError as exc:
+            return _err(str(exc))
+
+    def credentials_delete(self, email: str) -> dict:
+        credentials.delete_password(email)
+        return _ok()
+
+    # ---- módulos ---------------------------------------------------------
+
+    def list_modules(self) -> dict:
+        if self._session is None:
+            return _err("Faça login para continuar.")
+        return _ok(MODULES_FASE1)
+
+    # ---- estoque ---------------------------------------------------------
+
+    def _token(self) -> str | None:
+        return self._session.access_token if self._session else None
+
+    def estoque_listar(self, pagina: int = 1, busca: str = "") -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            return _ok(estoque.listar(self._token(), int(pagina or 1), busca or ""))
+        except httpx.HTTPError:
+            return _err("Não foi possível carregar os produtos. Verifique sua internet e tente novamente.")
+
+    def estoque_salvar(self, produto: dict) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        erros = validacao.validar_produto(produto)
+        if erros:
+            return {"ok": False, "field_errors": erros,
+                    "error": "Alguns campos precisam de atenção — veja as mensagens abaixo deles."}
+        try:
+            return _ok(estoque.salvar(self._token(), produto))
+        except LookupError as exc:
+            return _err(str(exc))
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 409:
+                return {"ok": False,
+                        "field_errors": {"ean": "Já existe um produto com este código de barras na sua loja."},
+                        "error": "Código de barras repetido."}
+            return _err("Não foi possível salvar. Tente novamente; se persistir, fale com o suporte.")
+        except httpx.HTTPError:
+            return _err("Não foi possível salvar. Verifique sua internet e tente novamente.")
+
+    def estoque_desativar(self, produto_id: str) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            estoque.desativar(self._token(), produto_id)
+            return _ok()
+        except httpx.HTTPError:
+            return _err("Não foi possível excluir o produto. Tente novamente.")
+
+    def estoque_ajustar(self, produto_id: str, quantidade, motivo: str = "") -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            qtd = float(str(quantidade).replace(",", "."))
+        except (TypeError, ValueError):
+            return _err("Quantidade inválida — use números (ex.: 5 ou -2,5).")
+        try:
+            resultado = estoque.ajustar(self._token(), produto_id, qtd, motivo)
+        except httpx.HTTPError:
+            return _err("Não foi possível ajustar o estoque. Verifique sua internet e tente novamente.")
+        if not resultado.get("ok"):
+            return _err(resultado.get("error", "Não foi possível ajustar o estoque."))
+        return _ok({"estoque_atual": resultado["estoque_atual"]})
