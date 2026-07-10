@@ -17,6 +17,12 @@ Especificação de referência: `UltraERP_Prompt_de_Projeto.md`. Estágio atual:
 
 ## Como rodar
 
+**Windows (mais fácil):** dê dois cliques em **`UltraERP.bat`** (ou no atalho
+`UltraERP` na Área de Trabalho). Na primeira vez ele cria o ambiente e instala
+as dependências sozinho; nas seguintes, apenas abre o app.
+
+**Manual (qualquer plataforma):**
+
 ```bash
 python -m venv .venv
 .venv\Scripts\activate        # Windows  (Linux/macOS: source .venv/bin/activate)
