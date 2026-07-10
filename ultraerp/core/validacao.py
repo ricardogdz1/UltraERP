@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 
+from ultraerp.core.util import to_number
+
 # 27 unidades federativas (para validar a UF do cadastro da loja)
 UFS = {
     "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
@@ -62,6 +64,33 @@ def validar_cadastro(p: dict) -> dict[str, str]:
     return erros
 
 
+def validar_lancamento(p: dict) -> dict[str, str]:
+    """Valida um lançamento de conta a pagar/receber. Retorna {campo: mensagem}."""
+    erros: dict[str, str] = {}
+
+    if p.get("tipo") not in ("receber", "pagar"):
+        erros["tipo"] = "Escolha se é uma conta a receber ou a pagar."
+
+    if len((p.get("descricao") or "").strip()) < 2:
+        erros["descricao"] = "Descreva o lançamento (ex.: Aluguel, Fornecedor X)."
+
+    valor = p.get("valor")
+    if valor in (None, ""):
+        erros["valor"] = "Informe o valor."
+    else:
+        try:
+            if to_number(valor) <= 0:
+                erros["valor"] = "O valor deve ser maior que zero."
+        except (TypeError, ValueError):
+            erros["valor"] = "O valor deve ser um número — use vírgula ou ponto."
+
+    venc = (p.get("vencimento") or "").strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", venc):
+        erros["vencimento"] = "Informe a data de vencimento."
+
+    return erros
+
+
 def validar_ean(ean: str) -> str | None:
     """EAN/GTIN 8, 12, 13 ou 14 dígitos com dígito verificador (GS1)."""
     ean = (ean or "").strip()
@@ -108,13 +137,13 @@ def validar_produto(p: dict) -> dict[str, str]:
                 erros[campo] = "Informe o preço de venda."
             continue
         try:
-            if float(valor) < 0:
+            if to_number(valor) < 0:
                 erros[campo] = f"O {rotulo} não pode ser negativo."
         except (TypeError, ValueError):
             erros[campo] = f"O {rotulo} deve ser um número — use vírgula ou ponto para centavos."
 
     try:
-        if float(p.get("estoque_minimo") or 0) < 0:
+        if to_number(p.get("estoque_minimo") or 0) < 0:
             erros["estoque_minimo"] = "O estoque mínimo não pode ser negativo."
     except (TypeError, ValueError):
         erros["estoque_minimo"] = "O estoque mínimo deve ser um número."

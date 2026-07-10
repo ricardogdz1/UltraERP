@@ -9,6 +9,12 @@ const ModuloPDV = (() => {
   const brl = (v) =>
     Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  // Converte texto no formato brasileiro para número (vírgula = decimal).
+  const numBR = (s) => {
+    s = String(s || '').trim();
+    return s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+  };
+
   const FORMAS = [
     { id: 'dinheiro', label: 'Dinheiro' },
     { id: 'debito', label: 'Cartão débito' },
@@ -145,7 +151,7 @@ const ModuloPDV = (() => {
       const ehDinheiro = estado.forma === 'dinheiro';
       $('.pdv-dinheiro').style.display = ehDinheiro ? '' : 'none';
       if (!ehDinheiro) { $('.pdv-troco').textContent = ''; return; }
-      const recebido = Number(($('.pdv-recebido').value || '').replace(',', '.'));
+      const recebido = Number(numBR($('.pdv-recebido').value));
       if (!recebido) { $('.pdv-troco').textContent = ''; return; }
       const troco = recebido - total();
       $('.pdv-troco').textContent = troco >= 0

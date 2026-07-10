@@ -207,6 +207,11 @@ input.invalid { border-color: var(--danger); }
   border-radius: var(--radius-sm); padding: 1px var(--space-2);
   font-size: var(--text-sm); margin-left: var(--space-2);
 }
+.badge-ok {
+  color: var(--success); border: 1px solid var(--success);
+  border-radius: var(--radius-sm); padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+}
 
 .form-produto {
   background: var(--surface); border: 1px solid var(--border);

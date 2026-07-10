@@ -29,6 +29,7 @@
   --primary: #2563eb;
   --primary-contrast: #ffffff;
   --danger: #dc2626;
+  --success: #16a34a;
   --warning-bg: #fef3c7;
   --warning-text: #92400e;
 }
@@ -43,6 +44,7 @@
   --primary: #3b82f6;
   --primary-contrast: #ffffff;
   --danger: #f87171;
+  --success: #4ade80;
   --warning-bg: #3a2f14;
   --warning-text: #fbbf24;
 }

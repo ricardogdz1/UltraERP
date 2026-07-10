@@ -228,6 +228,7 @@
   const MODULE_RENDERERS = {
     estoque: (panel) => ModuloEstoque.render(panel),
     pdv: (panel) => ModuloPDV.render(panel),
+    caixa: (panel) => ModuloCaixa.render(panel),
   };
 
   function openModule(mod) {

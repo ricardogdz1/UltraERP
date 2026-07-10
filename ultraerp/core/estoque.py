@@ -15,6 +15,7 @@ import uuid
 import httpx
 
 from ultraerp.config import settings
+from ultraerp.core.util import to_number
 
 PAGE_SIZE = 25
 
@@ -149,9 +150,9 @@ def salvar(access_token: str, produto: dict) -> dict:
         "ean": (produto.get("ean") or "").strip(),
         "ncm": (produto.get("ncm") or "").strip(),
         "unidade": (produto.get("unidade") or "UN").strip() or "UN",
-        "preco_custo": float(produto.get("preco_custo") or 0),
-        "preco_venda": float(produto.get("preco_venda") or 0),
-        "estoque_minimo": float(produto.get("estoque_minimo") or 0),
+        "preco_custo": to_number(produto.get("preco_custo") or 0),
+        "preco_venda": to_number(produto.get("preco_venda") or 0),
+        "estoque_minimo": to_number(produto.get("estoque_minimo") or 0),
     }
     prod_id = produto.get("id")
 

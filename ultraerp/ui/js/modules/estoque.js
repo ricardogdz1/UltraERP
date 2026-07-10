@@ -25,9 +25,9 @@ const ModuloEstoque = (() => {
     input.maxLength = max;
     input.setAttribute('inputmode', 'decimal');
     input.addEventListener('input', () => {
-      // mantém dígitos e no máximo UM separador decimal (vírgula ou ponto)
-      const m = input.value.replace(/[^\d.,]/g, '').match(/^(\d*)([.,]?)(\d*)/);
-      const v = (m ? m[1] + m[2] + m[3] : '').slice(0, max);
+      // aceita dígitos e separadores (vírgula decimal, ponto de milhar);
+      // a conversão para número é feita no servidor (formato brasileiro)
+      const v = input.value.replace(/[^\d.,]/g, '').slice(0, max);
       if (input.value !== v) input.value = v;
     });
   }
@@ -211,8 +211,7 @@ const ModuloEstoque = (() => {
       form.querySelector('[data-acao=salvar]').addEventListener('click', async () => {
         const dados = {};
         form.querySelectorAll('input[name]').forEach(i => {
-          dados[i.name] = i.name.startsWith('preco') || i.name === 'estoque_minimo'
-            ? i.value.replace(',', '.') : i.value;
+          dados[i.name] = i.value;  // valores monetários são normalizados no servidor
           i.classList.remove('invalid');
         });
         form.querySelectorAll('[data-erro]').forEach(e => e.hidden = true);

@@ -14,7 +14,10 @@ import httpx
 
 from ultraerp import __version__
 from ultraerp.config import settings
-from ultraerp.core import auth, credentials, estoque, licensing, onboarding, pdv, prefs, validacao
+from ultraerp.core import (
+    auth, credentials, estoque, financeiro, licensing, onboarding, pdv, prefs, validacao,
+)
+from ultraerp.core.util import to_number
 
 # Módulos da Fase 1 (roadmap, seção 15). IDs usados pelo front para abrir abas.
 MODULES_FASE1 = [
@@ -223,7 +226,10 @@ class ApiBridge:
         if not self._token():
             return _err("Faça login para continuar.")
         try:
-            qtd = float(str(quantidade).replace(",", "."))
+            negativo = str(quantidade).strip().startswith("-")
+            qtd = to_number(str(quantidade).lstrip("-+"))
+            if negativo:
+                qtd = -qtd
         except (TypeError, ValueError):
             return _err("Quantidade inválida — use números (ex.: 5 ou -2,5).")
         try:
@@ -244,7 +250,7 @@ class ApiBridge:
         valor = None
         if valor_recebido not in (None, ""):
             try:
-                valor = float(str(valor_recebido).replace(",", "."))
+                valor = to_number(valor_recebido)
             except (TypeError, ValueError):
                 return _err("Valor recebido inválido — use números (ex.: 50,00).")
         try:
@@ -254,3 +260,55 @@ class ApiBridge:
         if not resultado.get("ok"):
             return _err(resultado.get("error", "Não foi possível finalizar a venda."))
         return _ok(resultado)
+
+    # ---- financeiro / fluxo de caixa --------------------------------------
+
+    def financeiro_resumo(self) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            return _ok(financeiro.resumo(self._token()))
+        except httpx.HTTPError:
+            return _err("Não foi possível carregar o resumo financeiro. Tente novamente.")
+
+    def financeiro_listar(self, tipo: str = "", situacao: str = "", pagina: int = 1) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            return _ok(financeiro.listar(self._token(), tipo or "", situacao or "", int(pagina or 1)))
+        except httpx.HTTPError:
+            return _err("Não foi possível carregar os lançamentos. Verifique sua internet e tente novamente.")
+
+    def financeiro_salvar(self, lancamento: dict) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        erros = validacao.validar_lancamento(lancamento or {})
+        if erros:
+            return {"ok": False, "field_errors": erros,
+                    "error": "Alguns campos precisam de atenção — veja as mensagens abaixo deles."}
+        try:
+            return _ok(financeiro.salvar(self._token(), lancamento))
+        except LookupError as exc:
+            return _err(str(exc))
+        except httpx.HTTPError:
+            return _err("Não foi possível salvar o lançamento. Verifique sua internet e tente novamente.")
+
+    def financeiro_baixar(self, lancamento_id: str, pago: bool = True) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            resultado = financeiro.baixar(self._token(), lancamento_id, bool(pago))
+        except httpx.HTTPError:
+            return _err("Não foi possível atualizar o lançamento. Tente novamente.")
+        if not resultado.get("ok"):
+            return _err(resultado.get("error", "Não foi possível atualizar o lançamento."))
+        return _ok()
+
+    def financeiro_excluir(self, lancamento_id: str) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            financeiro.excluir(self._token(), lancamento_id)
+            return _ok()
+        except httpx.HTTPError:
+            return _err("Não foi possível excluir. Contas geradas por vendas não podem ser excluídas.")
