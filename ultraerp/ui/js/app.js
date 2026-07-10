@@ -220,12 +220,18 @@
         li.addEventListener('click', () => openModule(m));
         menu.appendChild(li);
       }
+      // Ações rápidas do Dashboard podem abrir outras abas por id
+      window.__abrirModulo = (id) => {
+        const m = mods.data.find((x) => x.id === id);
+        if (m) openModule(m);
+      };
       openModule(mods.data[0]); // Dashboard como aba inicial
     }
   }
 
   // Módulos com tela própria; os demais caem no placeholder
   const MODULE_RENDERERS = {
+    dashboard: (panel) => ModuloDashboard.render(panel),
     estoque: (panel) => ModuloEstoque.render(panel),
     pdv: (panel) => ModuloPDV.render(panel),
     caixa: (panel) => ModuloCaixa.render(panel),

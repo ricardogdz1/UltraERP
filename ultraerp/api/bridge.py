@@ -15,7 +15,7 @@ import httpx
 from ultraerp import __version__
 from ultraerp.config import settings
 from ultraerp.core import (
-    auth, credentials, estoque, financeiro, licensing, onboarding, pdv, prefs, validacao,
+    auth, credentials, dashboard, estoque, financeiro, licensing, onboarding, pdv, prefs, validacao,
 )
 from ultraerp.core.util import to_number
 
@@ -163,6 +163,16 @@ class ApiBridge:
         if self._session is None:
             return _err("Faça login para continuar.")
         return _ok(MODULES_FASE1)
+
+    # ---- dashboard --------------------------------------------------------
+
+    def dashboard_resumo(self) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            return _ok(dashboard.resumo(self._token()))
+        except httpx.HTTPError:
+            return _err("Não foi possível carregar o resumo. Verifique sua internet e tente novamente.")
 
     # ---- estoque ---------------------------------------------------------
 
