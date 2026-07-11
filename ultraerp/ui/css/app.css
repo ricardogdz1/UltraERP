@@ -282,6 +282,14 @@ input.invalid { border-color: var(--danger); }
   background: var(--warning-bg); color: var(--warning-text);
   border-radius: var(--radius-sm); text-align: center;
 }
+.pdv-nfce { margin-top: var(--space-2); display: flex; gap: var(--space-2); align-items: center; justify-content: center; flex-wrap: wrap; }
+.pdv-nfce-status { font-size: var(--text-sm); }
+
+.fiscal-simulacao {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: var(--space-3); margin-bottom: var(--space-4);
+  background: var(--surface-2);
+}
 
 /* ---- Dashboard ---- */
 

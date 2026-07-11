@@ -188,15 +188,55 @@ const ModuloPDV = (() => {
 
       if (!r.ok) { avisar(r.error); btn.disabled = false; return; }
 
-      const { total: tot, troco } = r.data;
+      const { total: tot, troco, venda_id } = r.data;
       carrinho.length = 0;
       $('.pdv-recebido').value = '';
       renderCarrinho();
       const sucesso = $('.pdv-sucesso');
       sucesso.hidden = false;
-      sucesso.innerHTML = `✅ Venda concluída — <strong>${brl(tot)}</strong>` +
-        (troco > 0 ? ` · troco <strong>${brl(troco)}</strong>` : '');
+      sucesso.innerHTML = `
+        <div>✅ Venda concluída — <strong>${brl(tot)}</strong>${troco > 0 ? ` · troco <strong>${brl(troco)}</strong>` : ''}</div>
+        <div class="pdv-nfce">
+          <button class="btn-mini" data-emitir="${venda_id}">Emitir NFC-e</button>
+          <span class="pdv-nfce-status muted"></span>
+        </div>`;
+      sucesso.querySelector('[data-emitir]').addEventListener('click', (e) => emitirNfce(e.target.dataset.emitir));
       $('.busca-pdv').focus();
+    }
+
+    async function emitirNfce(vendaId) {
+      const sucesso = $('.pdv-sucesso');
+      const btn = sucesso.querySelector('[data-emitir]');
+      const st = sucesso.querySelector('.pdv-nfce-status');
+      btn.disabled = true;
+      st.textContent = 'Emitindo…';
+      const r = await Api.call('fiscal_emitir', vendaId);
+      if (!r.ok) {
+        btn.disabled = false;
+        st.innerHTML = `<span class="field-error">${esc(r.error)}</span> ` +
+          '<button class="btn-mini" data-cfg="1">Configurar</button>';
+        const cfg = st.querySelector('[data-cfg]');
+        if (cfg) cfg.addEventListener('click', () => Fiscal.abrirConfig());
+        return;
+      }
+      const status = r.data.status;
+      if (status === 'autorizada') { st.innerHTML = '<span class="badge-ok">NFC-e autorizada</span>'; btn.remove(); }
+      else if (status === 'rejeitada') { btn.disabled = false; st.innerHTML = `<span class="field-error">Rejeitada: ${esc(r.data.motivo || '')}</span>`; }
+      else {
+        // processando: acompanha o status por alguns segundos (webhook da Focus)
+        st.textContent = 'Enviada — aguardando autorização…';
+        acompanhar(vendaId, st, btn);
+      }
+    }
+
+    async function acompanhar(vendaId, st, btn, tentativa = 0) {
+      if (tentativa >= 5) { st.textContent = 'Enviada. Consulte o status em instantes.'; return; }
+      await new Promise((res) => setTimeout(res, 3000));
+      const r = await Api.call('fiscal_nota', vendaId);
+      const nota = r.ok ? r.data : null;
+      if (nota && nota.status === 'autorizada') { st.innerHTML = '<span class="badge-ok">NFC-e autorizada</span>'; if (btn) btn.remove(); return; }
+      if (nota && nota.status === 'rejeitada') { if (btn) btn.disabled = false; st.innerHTML = `<span class="field-error">Rejeitada: ${esc(nota.motivo || '')}</span>`; return; }
+      acompanhar(vendaId, st, btn, tentativa + 1);
     }
 
     $('.pdv-finalizar').addEventListener('click', finalizar);

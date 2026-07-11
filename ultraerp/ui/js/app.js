@@ -261,6 +261,7 @@
     passInput.value = '';
   });
 
+  Fiscal.init();
   detectDemoMode();
   prefillCredentials();
 })();

@@ -91,6 +91,7 @@
       <span class="brand">Ultra<span>ERP</span></span>
       <nav id="tabbar" class="tabbar" aria-label="Abas abertas"></nav>
       <div class="topbar-actions">
+        <button id="config-btn" class="icon-btn" title="Configuração fiscal (NFC-e)">⚙</button>
         <button id="theme-toggle" class="icon-btn" title="Alternar tema claro/escuro">◐</button>
         <span id="user-email" class="user-email"></span>
         <button id="logout-btn" class="icon-btn" title="Sair">⏻</button>
@@ -103,11 +104,23 @@
       <main id="tab-panels" class="tab-panels"></main>
     </div>
     <footer id="license-banner" class="license-banner" hidden></footer>
+
+    <!-- Modal de configuração fiscal (NFC-e) -->
+    <div id="fiscal-modal" class="modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h3>Configuração fiscal (NFC-e)</h3>
+          <button class="modal-close" id="fiscal-modal-close" title="Fechar">✕</button>
+        </div>
+        <div class="modal-body" id="fiscal-modal-body"></div>
+      </div>
+    </div>
   </div>
 
   <script src="js/api.js"></script>
   <script src="js/theme.js"></script>
   <script src="js/tabs.js"></script>
+  <script src="js/fiscal.js"></script>
   <script src="js/modules/dashboard.js"></script>
   <script src="js/modules/estoque.js"></script>
   <script src="js/modules/pdv.js"></script>

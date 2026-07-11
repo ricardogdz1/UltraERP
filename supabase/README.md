@@ -3,9 +3,10 @@
 ## Passos
 
 1. Crie um projeto em [supabase.com](https://supabase.com) (região `sa-east-1`, São Paulo — menor latência para lojistas brasileiros).
-2. No **SQL Editor**, execute os arquivos de `migrations/` **na ordem** (0001 a 0011):
+2. No **SQL Editor**, execute os arquivos de `migrations/` **na ordem** (0001 a 0013):
    base → RLS → subscription_status → estoque → fix_grants → onboarding →
-   estoque_resumo → produtos_loja_default → pdv → financeiro → dashboard.
+   estoque_resumo → produtos_loja_default → pdv → financeiro → dashboard →
+   fiscal → fiscal_simulacao.
    *(Já aplicadas no projeto `UltraERP-BR` em sa-east-1.)*
 3. Em **Authentication → Providers**, deixe apenas *Email* habilitado (Fase 1) e desative *Confirm email* durante o desenvolvimento.
 4. Em **Settings → API**, copie a *URL* e a *anon key* para o `.env` do app. Em **Settings → Database**, copie a connection string do *pooler* (porta 6543) para `DATABASE_URL`.
@@ -52,8 +53,28 @@ Para ativar, falta apenas (manual, no painel de cada serviço):
 2. Salvar esse mesmo token como secret `ASAAS_WEBHOOK_TOKEN` em Edge Functions → Secrets no dashboard do Supabase.
 3. Ao criar cobranças/assinaturas no Asaas, preencher `externalReference` com o `lojas.id`.
 
+## Fiscal (NFC-e via Focus NFe)
+
+Estrutura pronta, faltando só o token de homologação da Focus:
+- Tabelas `configuracao_fiscal` (token/CSC **não legíveis pelo cliente** — só
+  service_role e RPCs security definer) e `notas_fiscais` (registro das notas).
+- Edge Functions `fiscal-emitir` (emite no servidor, monta a NFC-e da venda,
+  valida NCM) e `fiscal-webhook` (confirmação assíncrona da Focus).
+- **Modo simulação**: liga na ⚙ engrenagem do app e o botão “Emitir NFC-e” do
+  PDV gera uma nota fictícia (marcada *SIMULAÇÃO — sem valor fiscal*) — testa
+  todo o fluxo sem token/CNPJ/certificado. Testado de ponta a ponta.
+
+Para emitir de verdade (quando tiver a empresa aberta):
+1. Criar conta na Focus NFe e enviar o certificado A1 lá; pegar o **token**.
+2. Obter o **CSC** no portal da SEFAZ do estado (para NFC-e).
+3. Na ⚙ engrenagem do app: desligar simulação, colar o token e o CSC,
+   preencher IE/endereço/regime.
+4. Definir o secret `FISCAL_WEBHOOK_SECRET` e apontar o webhook da Focus para
+   `.../functions/v1/fiscal-webhook?segredo=SEU_SEGREDO`.
+
 ## Pendências (próximas etapas)
 
 - RPCs de gestão de usuários (convidar, trocar papel) com checagem de papel administrador.
 - Token de graça offline assinado pelo servidor (48–72h).
-- Idempotência/registro de eventos recebidos no webhook (tabela de eventos processados).
+- Envio do certificado A1 à Focus pela própria interface (hoje: pelo painel da Focus).
+- Regras fiscais além do Simples Nacional (CST/alíquotas por UF) no payload da NFC-e.

@@ -15,7 +15,8 @@ import httpx
 from ultraerp import __version__
 from ultraerp.config import settings
 from ultraerp.core import (
-    auth, credentials, dashboard, estoque, financeiro, licensing, onboarding, pdv, prefs, validacao,
+    auth, credentials, dashboard, estoque, financeiro, fiscal, licensing,
+    onboarding, pdv, prefs, validacao,
 )
 from ultraerp.core.util import to_number
 
@@ -270,6 +271,48 @@ class ApiBridge:
         if not resultado.get("ok"):
             return _err(resultado.get("error", "Não foi possível finalizar a venda."))
         return _ok(resultado)
+
+    # ---- fiscal (NFC-e) ---------------------------------------------------
+
+    def fiscal_status(self) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            return _ok(fiscal.status(self._token()))
+        except httpx.HTTPError:
+            return _err("Não foi possível consultar a configuração fiscal. Tente novamente.")
+
+    def fiscal_config_salvar(self, dados: dict) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            resultado = fiscal.salvar_config(self._token(), dados or {})
+        except httpx.HTTPError:
+            return _err("Não foi possível salvar a configuração fiscal. Verifique sua internet.")
+        if not resultado.get("ok"):
+            return _err(resultado.get("error", "Não foi possível salvar a configuração fiscal."))
+        return _ok()
+
+    def fiscal_emitir(self, venda_id: str) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        if not venda_id:
+            return _err("Venda não informada.")
+        try:
+            resultado = fiscal.emitir(self._token(), venda_id)
+        except httpx.HTTPError:
+            return _err("Não foi possível falar com o emissor fiscal. Verifique sua internet e tente novamente.")
+        if not resultado.get("ok"):
+            return _err(resultado.get("error", "Não foi possível emitir a nota."))
+        return _ok(resultado)
+
+    def fiscal_nota(self, venda_id: str) -> dict:
+        if not self._token():
+            return _err("Faça login para continuar.")
+        try:
+            return _ok(fiscal.nota_da_venda(self._token(), venda_id))
+        except httpx.HTTPError:
+            return _err("Não foi possível consultar a nota. Tente novamente.")
 
     # ---- financeiro / fluxo de caixa --------------------------------------
 
